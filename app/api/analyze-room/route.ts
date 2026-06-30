@@ -1,13 +1,14 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 function extractJson(text: string) {
-  const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
-  return cleaned;
+  return text.replace(/```json/g, "").replace(/```/g, "").trim();
 }
 
 export async function POST(req: Request) {
@@ -21,13 +22,18 @@ export async function POST(req: Request) {
       );
     }
 
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        { error: "OPENAI_API_KEY is missing" },
+        { status: 500 }
+      );
+    }
+
     const imageResponse = await fetch(imageUrl);
 
     if (!imageResponse.ok) {
       return NextResponse.json(
-        {
-          error: `Image download failed: ${imageResponse.status}`,
-        },
+        { error: `Image download failed: ${imageResponse.status}` },
         { status: 400 }
       );
     }
@@ -39,14 +45,15 @@ export async function POST(req: Request) {
     const base64Image = Buffer.from(imageBuffer).toString("base64");
     const dataUrl = `data:${contentType};base64,${base64Image}`;
 
-    const response = await openai.responses.create({
+    const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      input: [
+      response_format: { type: "json_object" },
+      messages: [
         {
           role: "user",
           content: [
             {
-              type: "input_text",
+              type: "text",
               text: `
 당신은 한국 주거 인테리어 전문가입니다.
 
@@ -72,15 +79,19 @@ export async function POST(req: Request) {
 `,
             },
             {
-              type: "input_image",
-              image_url: dataUrl,
+              type: "image_url",
+              image_url: {
+                url: dataUrl,
+              },
             },
           ],
         },
       ],
     });
 
-    const resultText = extractJson(response.output_text);
+    const resultText = extractJson(
+      response.choices[0]?.message?.content ?? "{}"
+    );
 
     return NextResponse.json({
       result: resultText,
@@ -90,13 +101,6 @@ export async function POST(req: Request) {
 
     const message = err instanceof Error ? err.message : "AI 분석 실패";
 
-    return NextResponse.json(
-      {
-        error: message,
-      },
-      {
-        status: 500,
-      }
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
