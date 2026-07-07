@@ -200,8 +200,8 @@ export default function SentiraAirPage() {
   const lastUpdated = reading.created_at ? new Date(reading.created_at).toLocaleString("ko-KR") : `DB 최신 ID: ${reading.id}`;
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <section className="mx-auto max-w-7xl px-6 py-8 pb-12">
+    <main className="min-h-screen w-full overflow-x-hidden bg-slate-950 text-white">
+      <section className="mx-auto max-w-7xl px-4 md:px-6 py-8 pb-12">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-black">Sentira Air</h1>
