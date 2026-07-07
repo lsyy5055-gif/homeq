@@ -62,6 +62,13 @@ export default function SentiraAirPage() {
   const [history, setHistory] = useState<SensorReading[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // === 실시간 원격 제어용 상태 변수들 ===
+  const [controlMode, setControlMode] = useState<"auto" | "manual">("auto");
+  const [targetFan, setTargetFan] = useState(40);
+  const [targetHeater, setTargetHeater] = useState(0);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isUserInteracting, setIsUserInteracting] = useState(false); // 사용자가 마우스 슬라이더를 잡고 조작 중인지 여부
+
   useEffect(() => {
     async function fetchReadings() {
       try {
@@ -84,6 +91,13 @@ export default function SentiraAirPage() {
         if (result.history) {
           setHistory(result.history as SensorReading[]);
         }
+
+        // 사용자가 화면 슬라이더를 만지지 않고 있을 때만 서버의 최신 원격제어 상태와 동기화
+        if (result.controls && !isUserInteracting) {
+          setControlMode(result.controls.mode);
+          setTargetFan(result.controls.fan_percent);
+          setTargetHeater(result.controls.ptc_percent);
+        }
   
         setLoading(false);
       } catch (err) {
@@ -97,7 +111,29 @@ export default function SentiraAirPage() {
     const timer = setInterval(fetchReadings, 5000);
   
     return () => clearInterval(timer);
-  }, []);
+  }, [isUserInteracting]);
+
+  // DB에 직접 조작 상태 업데이트를 반영하는 함수
+  async function handleControlPatch(updatedFields: { mode?: "auto" | "manual"; fan_percent?: number; ptc_percent?: number }) {
+    try {
+      setIsUpdating(true);
+      const res = await fetch("/api/sentira-air", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serial_number: reading.serial_number ?? "SA-0001",
+          ...updatedFields
+        })
+      });
+      if (!res.ok) {
+        console.error("원격 설정 변경 실패");
+      }
+    } catch (err) {
+      console.error("원격 설정 처리 중 오류:", err);
+    } finally {
+      setIsUpdating(false);
+    }
+  }
 
   const hasSensorData =
     reading.temperature !== null ||
@@ -209,27 +245,142 @@ export default function SentiraAirPage() {
           />
         </section>
 
-        <SectionTitle title="제어 상태" />
+        {/* ================= 기기 제어 및 현황부 ================= */}
+        <div className="flex items-center justify-between mb-3 mt-8">
+          <h2 className="text-2xl font-black">기기 제어 & 원격 조작</h2>
+          {isUpdating && <span className="text-xs text-cyan-400 animate-pulse">원격 서버 반영 중...</span>}
+        </div>
 
-        <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <GaugeCard
-            title="팬 속도"
-            value={formatValue(reading.fan_percent, "%")}
-            percent={reading.fan_percent ?? 0}
-            desc="자동 제어"
-          />
+        <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {/* 팬 & 히터 실시간 가동 피드백 화면 */}
+          <div className="lg:col-span-1 grid grid-cols-1 gap-4">
+            <div className="rounded-[28px] bg-slate-900 p-6 shadow-lg flex flex-col justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-400">현재 팬 속도 (실제)</p>
+                <p className="mt-2 text-4xl font-black text-cyan-300">{formatValue(reading.fan_percent, "%")}</p>
+              </div>
+              <div className="mt-4 h-2 rounded-full bg-slate-800 overflow-hidden">
+                <div className="h-full bg-cyan-400 transition-all duration-500" style={{ width: `${reading.fan_percent ?? 0}%` }} />
+              </div>
+            </div>
 
-          <GaugeCard
-            title="PTC 히터"
-            value={formatValue(reading.ptc_percent, "%")}
-            percent={reading.ptc_percent ?? 0}
-            desc="출력 제어"
-          />
+            <div className="rounded-[28px] bg-slate-900 p-6 shadow-lg flex flex-col justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-400">현재 PTC 히터 출력 (실제)</p>
+                <p className="mt-2 text-4xl font-black text-orange-400">{formatValue(reading.ptc_percent, "%")}</p>
+              </div>
+              <div className="mt-4 h-2 rounded-full bg-slate-800 overflow-hidden">
+                <div className="h-full bg-orange-400 transition-all duration-500" style={{ width: `${reading.ptc_percent ?? 0}%` }} />
+              </div>
+            </div>
+          </div>
 
-          <InfoCard
-            title="공기질 상태"
-            value={reading.air_quality_status ?? "대기"}
-          />
+          {/* ⚡ 원격 무선 수동 제어 패널 */}
+          <div className="lg:col-span-2 rounded-[28px] border border-cyan-400/20 bg-slate-900 p-6 shadow-xl flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+                <div>
+                  <h3 className="text-lg font-bold">무선 원격 제어 패널</h3>
+                  <p className="text-xs text-slate-500">기기를 강제로 자동 또는 수동 전환할 수 있습니다.</p>
+                </div>
+
+                {/* 자동/수동 모드 스위치 */}
+                <div className="flex rounded-xl bg-slate-950 p-1">
+                  <button
+                    onClick={() => {
+                      setControlMode("auto");
+                      handleControlPatch({ mode: "auto" });
+                    }}
+                    className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                      controlMode === "auto" ? "bg-cyan-500 text-slate-950" : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    자동 제어
+                  </button>
+                  <button
+                    onClick={() => {
+                      setControlMode("manual");
+                      handleControlPatch({ mode: "manual" });
+                    }}
+                    className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                      controlMode === "manual" ? "bg-orange-500 text-slate-950" : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    원격 수동
+                  </button>
+                </div>
+              </div>
+
+              {/* 제어 입력 슬라이더 영역 */}
+              <div className="mt-6 space-y-6">
+                {/* 1. 수동 팬 세기 조절 */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold text-slate-300">수동 팬 속도 목표값</span>
+                    <span className={`text-base font-bold ${controlMode === "manual" ? "text-cyan-400" : "text-slate-600"}`}>
+                      {targetFan}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    disabled={controlMode === "auto"}
+                    value={targetFan}
+                    onMouseDown={() => setIsUserInteracting(true)}
+                    onTouchStart={() => setIsUserInteracting(true)}
+                    onChange={(e) => setTargetFan(Number(e.target.value))}
+                    onMouseUp={() => {
+                      setIsUserInteracting(false);
+                      handleControlPatch({ fan_percent: targetFan });
+                    }}
+                    onTouchEnd={() => {
+                      setIsUserInteracting(false);
+                      handleControlPatch({ fan_percent: targetFan });
+                    }}
+                    className="w-full h-2 rounded-lg bg-slate-950 appearance-none cursor-pointer accent-cyan-400 disabled:opacity-20 disabled:cursor-not-allowed"
+                  />
+                </div>
+
+                {/* 2. 수동 히터 출력 조절 */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold text-slate-300">수동 PTC 히터 목표값</span>
+                    <span className={`text-base font-bold ${controlMode === "manual" ? "text-orange-400" : "text-slate-600"}`}>
+                      {targetHeater}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    disabled={controlMode === "auto"}
+                    value={targetHeater}
+                    onMouseDown={() => setIsUserInteracting(true)}
+                    onTouchStart={() => setIsUserInteracting(true)}
+                    onChange={(e) => setTargetHeater(Number(e.target.value))}
+                    onMouseUp={() => {
+                      setIsUserInteracting(false);
+                      handleControlPatch({ ptc_percent: targetHeater });
+                    }}
+                    onTouchEnd={() => {
+                      setIsUserInteracting(false);
+                      handleControlPatch({ ptc_percent: targetHeater });
+                    }}
+                    className="w-full h-2 rounded-lg bg-slate-950 appearance-none cursor-pointer accent-orange-400 disabled:opacity-20 disabled:cursor-not-allowed"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-800 text-center">
+              <p className="text-xs text-slate-500">
+                {controlMode === "auto" 
+                  ? "현재 실내 환경 센서값에 의존해 하드웨어가 스스로 가동되고 있습니다." 
+                  : "수동 제어 활성화 중. 설정한 조작값이 동기화 주기(약 10초)에 맞추어 ESP32 기기에 전송됩니다."}
+              </p>
+            </div>
+          </div>
         </section>
 
         <SectionTitle title="최근 CO₂ 변화" />
