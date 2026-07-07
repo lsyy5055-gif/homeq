@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Header from "./components/Header";
 
 export const metadata: Metadata = {
   title: "Sentira Air",
@@ -15,8 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body>
-        <Header />
+      <body className="bg-slate-950 text-white">
         {children}
       </body>
     </html>
