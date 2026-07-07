@@ -410,9 +410,9 @@ export default function SentiraAirPage() {
 
             <ControlSlider
               title="FAN1"
-              actual={actualFan1}
-              target={targetFan1}
+              value={controlMode === "auto" ? actualFan1 : targetFan1}
               disabled={controlMode === "auto"}
+              mode={controlMode}
               onStart={() => setIsUserInteracting(true)}
               onChange={setTargetFan1}
               onCommit={() => {
@@ -423,9 +423,9 @@ export default function SentiraAirPage() {
 
             <ControlSlider
               title="FAN2"
-              actual={actualFan2}
-              target={targetFan2}
+              value={controlMode === "auto" ? actualFan2 : targetFan2}
               disabled={controlMode === "auto"}
+              mode={controlMode}
               onStart={() => setIsUserInteracting(true)}
               onChange={setTargetFan2}
               onCommit={() => {
@@ -435,10 +435,10 @@ export default function SentiraAirPage() {
             />
 
             <ControlSlider
-              title="PTC"
-              actual={actualHeater}
-              target={targetHeater}
+              title="PTC 히터"
+              value={controlMode === "auto" ? actualHeater : targetHeater}
               disabled={controlMode === "auto"}
+              mode={controlMode}
               accent="orange"
               onStart={() => setIsUserInteracting(true)}
               onChange={setTargetHeater}
@@ -449,7 +449,7 @@ export default function SentiraAirPage() {
             />
 
             <p className="text-center text-xs text-slate-500">
-              {isUpdating ? "원격 서버 반영 중..." : controlMode === "auto" ? "자동모드에서는 센서값 기준으로 기기가 스스로 제어합니다." : "수동모드에서는 설정값이 약 5초 주기로 기기에 반영됩니다."}
+              {isUpdating ? "원격 서버 반영 중..." : controlMode === "auto" ? "자동모드에서는 센서값 기준으로 현재 출력값을 표시합니다." : "수동모드에서는 사용자가 설정한 출력값을 표시합니다."}
             </p>
           </div>
         </Accordion>
@@ -549,45 +549,47 @@ function Accordion({
 
 function ControlSlider({
   title,
-  actual,
-  target,
+  value,
   disabled,
+  mode,
   accent = "cyan",
   onStart,
   onChange,
   onCommit,
 }: {
   title: string;
-  actual: number;
-  target: number;
+  value: number;
   disabled: boolean;
+  mode: "auto" | "manual";
   accent?: "cyan" | "orange";
   onStart: () => void;
   onChange: (value: number) => void;
   onCommit: () => void;
 }) {
+  const safeValue = clamp(value);
   const barColor = accent === "orange" ? "bg-orange-400" : "bg-cyan-400";
   const accentClass = accent === "orange" ? "accent-orange-400" : "accent-cyan-400";
+  const label = mode === "auto" ? "자동모드 현재 출력" : "수동모드 설정 출력";
 
   return (
     <div className="rounded-2xl bg-slate-950/70 p-4">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-black">{title}</p>
-          <p className="mt-1 text-xs text-slate-500">실제 {actual}% · 목표 {target}%</p>
+          <p className="mt-1 text-xs text-slate-500">{label}</p>
         </div>
-        <p className="text-2xl font-black">{target}%</p>
+        <p className="text-2xl font-black">{safeValue}%</p>
       </div>
 
       <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-800">
-        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${clamp(actual)}%` }} />
+        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${safeValue}%` }} />
       </div>
 
       <input
         type="range"
         min="0"
         max="100"
-        value={target}
+        value={safeValue}
         disabled={disabled}
         onMouseDown={onStart}
         onTouchStart={onStart}
