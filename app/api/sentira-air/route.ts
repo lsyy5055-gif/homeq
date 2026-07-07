@@ -68,6 +68,8 @@ export async function POST(req: Request) {
       humidity: body.humidity ?? null,
       co2: body.co2 ?? null,
       voc: body.voc ?? null,
+      ntc1_temp: body.ntc1_temp ?? null,
+      ntc2_temp: body.ntc2_temp ?? null,
       window_temp: body.window_temp ?? null,
       dew_point: body.dew_point ?? null,
       fan_percent: body.fan_percent ?? null,
