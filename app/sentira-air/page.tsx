@@ -232,6 +232,11 @@ export default function SentiraAirPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isUserInteracting, setIsUserInteracting] = useState(false);
 
+  const [confirmLocation, setConfirmLocation] = useState<"glass" | "frame" | "both">("glass");
+  const [confirmNote, setConfirmNote] = useState("");
+  const [isConfirmingCondensation, setIsConfirmingCondensation] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState("");
+
   async function fetchDashboard() {
     try {
       const res = await fetch("/api/sentira-air", { cache: "no-store" });
@@ -295,6 +300,71 @@ export default function SentiraAirPage() {
       console.error("Control PATCH error:", err);
     } finally {
       setIsUpdating(false);
+    }
+  }
+
+  async function confirmCondensation() {
+    const locationText =
+      confirmLocation === "glass"
+        ? "유리"
+        : confirmLocation === "frame"
+          ? "프레임"
+          : "유리와 프레임 모두";
+
+    const confirmed = window.confirm(
+      `${locationText}에서 실제 결로를 확인했습니까?\n확인을 누르면 현재 센서값과 함께 실증 기록으로 저장됩니다.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setIsConfirmingCondensation(true);
+      setConfirmMessage("");
+
+      const res = await fetch("/api/condensation-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serial_number: reading.serial_number ?? "SA-0001",
+          event_type: "manual_confirmed",
+          location: confirmLocation,
+          note: confirmNote.trim() || null,
+
+          sensor_reading_id: reading.id ?? null,
+          moisture_pf: moistureValue,
+          surface_temp: glassSurfaceTemp,
+          air_temp: glassAirTemp,
+          air_humidity: glassAirHumidity,
+
+          body_temp: bodyTemp,
+          body_humidity: bodyHumidity,
+          outdoor_temp: outdoorTemp,
+          heater_temp: heaterTemp,
+          dew_point: reading.dew_point ?? null,
+          condensation_risk: reading.condensation_risk ?? null,
+          co2: reading.co2 ?? null,
+          voc: reading.voc ?? null,
+          fan1_percent: reading.fan1_percent ?? reading.fan_percent ?? null,
+          fan2_percent: reading.fan2_percent ?? reading.fan_percent ?? null,
+          ptc_percent: reading.ptc_percent ?? null,
+          glass_moisture_detected: reading.glass_moisture_detected ?? false,
+        }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok || !result.ok) {
+        throw new Error(result.error ?? "결로 확인 기록 저장 실패");
+      }
+
+      setConfirmMessage("실제 결로 확인 기록이 저장되었습니다.");
+      setConfirmNote("");
+      await fetchDashboard();
+    } catch (err) {
+      console.error("Condensation confirmation error:", err);
+      setConfirmMessage("기록 저장에 실패했습니다.");
+    } finally {
+      setIsConfirmingCondensation(false);
     }
   }
 
@@ -453,6 +523,76 @@ export default function SentiraAirPage() {
               <p className="mt-2 text-sm text-slate-500">BLE 유리센서가 연결되면 표면온도, 창가 온습도, 수분값, 배터리가 표시됩니다.</p>
             </div>
           )}
+        </Accordion>
+
+        <Accordion title="실제 결로 확인" defaultOpen>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm font-bold text-slate-300">결로 위치</p>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {[
+                  { value: "glass", label: "유리" },
+                  { value: "frame", label: "프레임" },
+                  { value: "both", label: "둘 다" },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() =>
+                      setConfirmLocation(item.value as "glass" | "frame" | "both")
+                    }
+                    className={`rounded-xl px-3 py-3 text-sm font-black transition ${
+                      confirmLocation === item.value
+                        ? "bg-rose-500 text-white"
+                        : "bg-slate-950 text-slate-400"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-bold text-slate-300" htmlFor="condensation-note">
+                메모
+              </label>
+              <textarea
+                id="condensation-note"
+                value={confirmNote}
+                onChange={(e) => setConfirmNote(e.target.value)}
+                placeholder="예: 창틀 하단에 물방울 확인"
+                rows={3}
+                className="mt-3 w-full resize-none rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-rose-400"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={confirmCondensation}
+              disabled={isConfirmingCondensation}
+              className="w-full rounded-2xl bg-rose-500 px-4 py-4 text-base font-black text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isConfirmingCondensation ? "기록 저장 중..." : "실제 결로 확인"}
+            </button>
+
+            {confirmMessage && (
+              <p
+                className={`text-center text-sm font-bold ${
+                  confirmMessage.includes("실패")
+                    ? "text-rose-300"
+                    : "text-emerald-300"
+                }`}
+              >
+                {confirmMessage}
+              </p>
+            )}
+
+            <p className="text-center text-xs leading-5 text-slate-500">
+              버튼을 누르면 현재 수분값, 유리표면온도, 창가 온습도, 이슬점,
+              외기온도와 팬·히터 출력이 함께 저장됩니다.
+            </p>
+          </div>
         </Accordion>
 
         <Accordion title="원격 제어" defaultOpen>
