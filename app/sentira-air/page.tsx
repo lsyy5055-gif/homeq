@@ -32,15 +32,6 @@ type SensorReading = {
   air_quality_status?: string | null;
   ai_message?: string | null;
 
-  glass_sensor_id?: string | null;
-  glass_ble_connected?: boolean | null;
-  glass_surface_temp?: number | null;
-  glass_air_temp?: number | null;
-  glass_air_humidity?: number | null;
-  glass_moisture_pf?: number | null;
-  glass_moisture_delta_pf?: number | null;
-  glass_battery_percent?: number | null;
-
   created_at?: string | null;
 };
 
@@ -105,6 +96,39 @@ function getRiskGrade(percent: number) {
   if (percent >= 80) return { label: "위험", tone: "text-rose-300", dot: "bg-rose-400", bg: "bg-rose-500/10" };
   if (percent >= 50) return { label: "주의", tone: "text-amber-300", dot: "bg-amber-400", bg: "bg-amber-500/10" };
   return { label: "안전", tone: "text-emerald-300", dot: "bg-emerald-400", bg: "bg-emerald-500/10" };
+}
+
+function getMoistureStatus(value?: number | null, detected?: boolean | null) {
+  if (detected === true || (typeof value === "number" && value >= 30)) {
+    return {
+      label: "결로 심각",
+      detail: "수분이 강하게 감지되었습니다.",
+      tone: "text-rose-300",
+      dot: "bg-rose-400",
+      bg: "bg-rose-500/10",
+      border: "border-rose-400/30",
+    };
+  }
+
+  if (typeof value === "number" && value >= 20) {
+    return {
+      label: "결로 시작",
+      detail: "초기 수분이 감지되었습니다.",
+      tone: "text-amber-300",
+      dot: "bg-amber-400",
+      bg: "bg-amber-500/10",
+      border: "border-amber-400/30",
+    };
+  }
+
+  return {
+    label: "정상",
+    detail: "수분이 감지되지 않았습니다.",
+    tone: "text-emerald-300",
+    dot: "bg-emerald-400",
+    bg: "bg-emerald-500/10",
+    border: "border-emerald-400/20",
+  };
 }
 
 function getAirQualityGrade(co2?: number | null, voc?: number | null) {
@@ -269,13 +293,11 @@ export default function SentiraAirPage() {
   const outdoorTemp = reading.outdoor_temp ?? reading.ntc1_temp ?? null;
   const heaterTemp = reading.heater_temp ?? reading.ntc2_temp ?? null;
 
-  const glassSurfaceTemp = asNumber(
-    reading.glass_surface_temp ?? reading.window_temp
-  );
-  const glassAirTemp = asNumber(reading.glass_air_temp);
-  const glassAirHumidity = asNumber(reading.glass_air_humidity);
-  const moistureValue = asNumber(reading.glass_moisture_pf);
-  const batteryPercent = asNumber(reading.glass_battery_percent);
+  const glassSurfaceTemp = asNumber((reading as any).glass_surface_temp ?? reading.window_temp);
+  const glassAirTemp = asNumber((reading as any).glass_air_temp);
+  const glassAirHumidity = asNumber((reading as any).glass_air_humidity);
+  const moistureValue = asNumber((reading as any).moisture_value);
+  const batteryPercent = asNumber((reading as any).battery_percent);
 
   const avgTemp = averageNullable(bodyTemp, glassAirTemp);
   const avgHumidity = averageNullable(bodyHumidity, glassAirHumidity);
@@ -293,11 +315,11 @@ export default function SentiraAirPage() {
   const reasons = makeReasonList(reading, controlMode, actualHeater);
 
   const glassConnected =
-  reading.glass_ble_connected === true ||
-  glassSurfaceTemp !== null ||
-  glassAirTemp !== null ||
-  glassAirHumidity !== null ||
-  moistureValue !== null;
+    glassSurfaceTemp !== null ||
+    glassAirTemp !== null ||
+    glassAirHumidity !== null ||
+    moistureValue !== null ||
+    batteryPercent !== null;
 
   const updatedText = getUpdatedText(reading.created_at, reading.id);
 
@@ -363,6 +385,23 @@ export default function SentiraAirPage() {
           </div>
         </section>
 
+        {moistureDetected && (
+          <section className={`mt-4 rounded-[28px] border ${moistureStatus.border} ${moistureStatus.bg} p-5`}>
+            <div className="flex items-start gap-3">
+              <span className={`mt-1 h-3 w-3 shrink-0 rounded-full ${moistureStatus.dot}`} />
+              <div>
+                <p className={`text-lg font-black ${moistureStatus.tone}`}>창문 수분 감지</p>
+                <p className="mt-1 text-sm font-semibold text-slate-200">
+                  {moistureStatus.detail}
+                </p>
+                <p className="mt-2 text-xs text-slate-400">
+                  현재 측정값 {moistureValue === null ? "--" : `${moistureValue.toFixed(2)} pF`}
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
+
         <Accordion title="본체 상태" defaultOpen>
           <div className="grid grid-cols-2 gap-3">
             <Metric title="본체온도" value={formatValue(bodyTemp, "℃")} />
@@ -380,10 +419,7 @@ export default function SentiraAirPage() {
               <Metric title="유리표면온도" value={formatValue(glassSurfaceTemp, "℃")} />
               <Metric title="창가온도" value={formatValue(glassAirTemp, "℃")} />
               <Metric title="창가습도" value={formatValue(glassAirHumidity, "%")} />
-              <Metric
-  title="수분측정"
-  value={moistureValue === null ? "--" : `${moistureValue.toFixed(2)} pF`}
-/>
+              <Metric title="수분측정" value={moistureValue === null ? "--" : `${moistureValue}`} />
               <Metric title="배터리" value={formatValue(batteryPercent, "%", 0)} />
               <Metric title="BLE 상태" value="연결됨" />
             </div>
