@@ -32,6 +32,16 @@ type SensorReading = {
   air_quality_status?: string | null;
   ai_message?: string | null;
 
+  glass_sensor_id?: string | null;
+  glass_ble_connected?: boolean | null;
+  glass_surface_temp?: number | null;
+  glass_air_temp?: number | null;
+  glass_air_humidity?: number | null;
+  glass_moisture_pf?: number | null;
+  glass_moisture_delta_pf?: number | null;
+  glass_moisture_detected?: boolean | null;
+  glass_battery_percent?: number | null;
+
   created_at?: string | null;
 };
 
@@ -293,11 +303,18 @@ export default function SentiraAirPage() {
   const outdoorTemp = reading.outdoor_temp ?? reading.ntc1_temp ?? null;
   const heaterTemp = reading.heater_temp ?? reading.ntc2_temp ?? null;
 
-  const glassSurfaceTemp = asNumber((reading as any).glass_surface_temp ?? reading.window_temp);
-  const glassAirTemp = asNumber((reading as any).glass_air_temp);
-  const glassAirHumidity = asNumber((reading as any).glass_air_humidity);
-  const moistureValue = asNumber((reading as any).moisture_value);
-  const batteryPercent = asNumber((reading as any).battery_percent);
+  const glassSurfaceTemp = asNumber(
+    reading.glass_surface_temp ?? reading.window_temp
+  );
+  const glassAirTemp = asNumber(reading.glass_air_temp);
+  const glassAirHumidity = asNumber(reading.glass_air_humidity);
+  const moistureValue = asNumber(reading.glass_moisture_pf);
+  const moistureDetected = reading.glass_moisture_detected === true;
+  const moistureStatus = getMoistureStatus(
+    moistureValue,
+    moistureDetected
+  );
+  const batteryPercent = asNumber(reading.glass_battery_percent);
 
   const avgTemp = averageNullable(bodyTemp, glassAirTemp);
   const avgHumidity = averageNullable(bodyHumidity, glassAirHumidity);
@@ -315,11 +332,11 @@ export default function SentiraAirPage() {
   const reasons = makeReasonList(reading, controlMode, actualHeater);
 
   const glassConnected =
+    reading.glass_ble_connected === true ||
     glassSurfaceTemp !== null ||
     glassAirTemp !== null ||
     glassAirHumidity !== null ||
-    moistureValue !== null ||
-    batteryPercent !== null;
+    moistureValue !== null;
 
   const updatedText = getUpdatedText(reading.created_at, reading.id);
 
@@ -419,7 +436,14 @@ export default function SentiraAirPage() {
               <Metric title="유리표면온도" value={formatValue(glassSurfaceTemp, "℃")} />
               <Metric title="창가온도" value={formatValue(glassAirTemp, "℃")} />
               <Metric title="창가습도" value={formatValue(glassAirHumidity, "%")} />
-              <Metric title="수분측정" value={moistureValue === null ? "--" : `${moistureValue}`} />
+              <Metric
+                title="수분 상태"
+                value={
+                  moistureValue === null
+                    ? "--"
+                    : `${moistureStatus.label} · ${moistureValue.toFixed(2)} pF`
+                }
+              />
               <Metric title="배터리" value={formatValue(batteryPercent, "%", 0)} />
               <Metric title="BLE 상태" value="연결됨" />
             </div>
