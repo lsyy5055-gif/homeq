@@ -74,18 +74,31 @@ export async function POST(req: Request) {
       heater_temp: body.heater_temp ?? body.ntc2_temp ?? null,
       ntc1_temp: body.ntc1_temp ?? null,
       ntc2_temp: body.ntc2_temp ?? null,
-      window_temp: body.window_temp ?? null,
+      window_temp: body.window_temp ?? body.glass_surface_temp ?? null,
+
+      glass_sensor_id: body.glass_sensor_id ?? null,
+      glass_surface_temp: body.glass_surface_temp ?? null,
+      glass_air_temp: body.glass_air_temp ?? null,
+      glass_air_humidity: body.glass_air_humidity ?? null,
+      glass_moisture_pf: body.glass_moisture_pf ?? null,
+      glass_moisture_delta_pf: body.glass_moisture_delta_pf ?? null,
+      glass_battery_percent: body.glass_battery_percent ?? null,
+      glass_ble_connected: body.glass_ble_connected ?? false,
+    
       dew_point: body.dew_point ?? null,
+    
       fan_percent: body.fan_percent ?? null,
       fan1_percent: body.fan1_percent ?? null,
       fan2_percent: body.fan2_percent ?? null,
+    
       ptc_percent: body.ptc_percent ?? null,
       auto_heater_percent: body.auto_heater_percent ?? null,
+    
       condensation_risk: body.condensation_risk ?? null,
       air_quality_status: body.air_quality_status ?? null,
       ai_message: body.ai_message ?? null,
     };
-
+    
     const { error: insertError } = await supabase
       .from("sensor_readings")
       .insert(payload);
