@@ -82,6 +82,7 @@ export async function POST(req: Request) {
       glass_air_humidity: body.glass_air_humidity ?? null,
       glass_moisture_pf: body.glass_moisture_pf ?? null,
       glass_moisture_delta_pf: body.glass_moisture_delta_pf ?? null,
+      glass_moisture_detected: body.glass_moisture_detected ?? false,
       glass_battery_percent: body.glass_battery_percent ?? null,
       glass_ble_connected: body.glass_ble_connected ?? false,
     
